@@ -5,7 +5,7 @@ Preprocessing library for data from the Virtual Lab survey platform.
 ## Installation
 
 ``` shell
-pip install vlab_prepro
+pip install vlab-prepro
 ```
 
 ## Usage
