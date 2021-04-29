@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "vlab_prepro"
+version = "0.1.0"
+description = ""
+authors = ["Nandan Rao <nandanmarkrao@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+toolz = "^0.11.1"
+pandas = "^1.2.4"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2.3"
+pytest-xdist = "^2.2.1"
+python-language-server = {extras = ["all"], version = "^0.36.2"}
+pyls-isort = "^0.2.0"
+pyls-black = "^0.4.6"
+pylint = "^2.8.2"
+future = "^0.18.2"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
