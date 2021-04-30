@@ -62,6 +62,7 @@ def test_add_metadata_ads_single_key(df):
     d = p.add_metadata(["stratumid"], df)
     assert "stratumid" in d.columns
     assert d["stratumid"].iloc[0] == "Z"
+    assert "stratumid" in p.keys
 
 
 # OR FAILS???
@@ -98,6 +99,7 @@ def test_add_time_indicators_adds_correct_week(df):
     d = p.add_time_indicators(["week"], df)
     assert "week" in d.columns
     assert d["week"].iloc[0] == 1
+    assert "week" in p.keys
 
 
 def test_drop_users_without_raises_on_missing_field(df):
@@ -120,6 +122,7 @@ def test_add_form_data_adds_metadata(df, form_df):
     assert "wave" in d.columns
     assert d[d.surveyid == "a"]["wave"].iloc[0] == "0"
     assert pd.isna(d[d.surveyid == "b"]["wave"].iloc[0])
+    assert "wave" in p.keys
 
 
 def test_keep_final_answer_removes_previous_answers(df):

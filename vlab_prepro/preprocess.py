@@ -108,6 +108,7 @@ class Preprocessor:
     def add_metadata(self, keys, df):
         for key in keys:
             df[key] = df.metadata.map(lambda x: json.loads(x).get(key))
+            self.keys.add(key)
         return df
 
     @curry
