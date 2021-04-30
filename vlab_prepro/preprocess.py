@@ -170,15 +170,19 @@ class Preprocessor:
         return df[df.final_answer].reset_index(drop=True)
 
     @curry
-    def add_percentage_valid(self, df):
+    def count_invalid(self, df):
         if "final_answer" not in df.columns:
             df = self.add_final_answer(df)
 
         df = df.groupby("userid").apply(
-            lambda df: df.assign(percentage_valid=df.final_answer.mean())
+            lambda df: df.assign(
+                invalid_answer_percentage=(~df.final_answer).mean(),
+                invalid_answer_count=df.final_answer.count() - df.final_answer.sum(),
+            )
         )
 
-        self.keys.add("percentage_valid")
+        self.keys.add("invalid_answer_percentage")
+        self.keys.add("invalid_answer_count")
 
         return df
 

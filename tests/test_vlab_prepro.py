@@ -146,7 +146,15 @@ def test_drop_duplicated_users_only_drops_those_which_duplicate_on_keys(df, form
 
 def test_add_percentage_valid(df):
     p = Preprocessor()
-    d = p.add_percentage_valid(df)
-    assert "percentage_valid" in d.columns
-    assert d[d.userid == "1"]["percentage_valid"].iloc[0] == 1.0
-    assert d[d.userid == "3"]["percentage_valid"].iloc[0] == 2 / 3
+    d = p.count_invalid(df)
+    assert "invalid_answer_percentage" in d.columns
+    assert "invalid_answer_count" in d.columns
+
+    assert d[d.userid == "1"]["invalid_answer_percentage"].iloc[0] == 0.0
+    assert d[d.userid == "3"]["invalid_answer_percentage"].iloc[0] == 1 / 3
+
+    assert d[d.userid == "1"]["invalid_answer_count"].iloc[0] == 0.0
+    assert d[d.userid == "3"]["invalid_answer_count"].iloc[0] == 1
+
+    assert "invalid_answer_percentage" in p.keys
+    assert "invalid_answer_count" in p.keys
