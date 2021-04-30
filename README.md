@@ -41,10 +41,10 @@ pipe(responses,
      # invalid answers)
      p.add_final_answer
 
-     # adds the percentage of non-final answers, assumed to be non-valid,
+     # adds the count/percentage of non-final answers, assumed to be non-valid,
      # at the user level (for each user it computes percentage based on their
      # entire history in your survey, across forms)
-     p.add_percentage_valid,
+     p.count_invalid,
 
      # drops all answers except the final answer to each question
      p.keep_final_answer,
