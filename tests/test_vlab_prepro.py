@@ -123,6 +123,7 @@ def test_add_form_data_adds_metadata(df, form_df):
     assert d[d.surveyid == "a"]["wave"].iloc[0] == "0"
     assert pd.isna(d[d.surveyid == "b"]["wave"].iloc[0])
     assert "wave" in p.keys
+    assert "shortcode" in p.keys
 
 
 def test_keep_final_answer_removes_previous_answers(df):
@@ -158,3 +159,23 @@ def test_add_percentage_valid(df):
 
     assert "invalid_answer_percentage" in p.keys
     assert "invalid_answer_count" in p.keys
+
+
+def test_columns_pivot_columns_pivots_by_user_survey_and_keeps_keys(form_df, df):
+    p = Preprocessor()
+    df = p.add_form_data(form_df, df)
+    df = p.count_invalid(df)
+    df = p.keep_final_answer(df)
+    d = p.pivot("response", df)
+
+    assert "userid" in d.columns
+    assert "surveyid" in d.columns
+    for ref in df.question_ref.unique():
+        assert ref in d.columns
+
+    for k in p.keys:
+        assert k in d.columns
+
+    print(p.keys)
+
+    assert "shortcode" in d.columns
