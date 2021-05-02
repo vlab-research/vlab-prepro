@@ -98,10 +98,7 @@ class Preprocessor:
     @curry
     def add_form_data(self, form_df, df):
         new_form_df = flatten_dict("metadata", form_df)
-
-        keys = _new_cols(form_df, new_form_df)
-        self.keys = self.keys | keys
-
+        self.keys = self.keys | set(new_form_df.columns)
         return df.merge(new_form_df, on="surveyid")
 
     @curry
@@ -212,7 +209,7 @@ class Preprocessor:
 
     @curry
     def pivot(self, answer_column, df):
-        keys = ["userid"] + list(self.keys)
+        keys = {"userid", "surveyid"} | self.keys
         return (
             df.pivot(keys, "question_ref", answer_column)
             .reset_index()
