@@ -33,9 +33,11 @@ def _add_duration(df):
     df = df.sort_values("timestamp")
     df["survey_start_time"] = df.timestamp.iloc[0]
     df["survey_end_time"] = df.timestamp.iloc[-1]
-    df["survey_duration"] = df.timestamp.iloc[-1] - df.timestamp.iloc[0]
+    df["survey_duration"] = (
+        df.timestamp.iloc[-1] - df.timestamp.iloc[0]
+    ).total_seconds()
 
-    time_to_answer = df.timestamp.diff()
+    time_to_answer = df.timestamp.diff().dt.total_seconds()
     df["answer_time_min"] = time_to_answer.min()
     df["answer_time_median"] = time_to_answer.quantile(0.5)
     df["answer_time_75"] = time_to_answer.quantile(0.75)

@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -57,6 +58,10 @@ def form_df():
     return pd.DataFrame(data, columns=columns)
 
 
+# TODO: test empty data frames - some way to know where it went wrong
+# rather than ambiguous missing column errors...
+
+
 def test_add_metadata_ads_single_key(df):
     p = Preprocessor()
     d = p.add_metadata(["stratumid"], df)
@@ -65,18 +70,12 @@ def test_add_metadata_ads_single_key(df):
     assert "stratumid" in p.keys
 
 
-# OR FAILS???
-# def test_add_metadata_works_with_empty():
-#     p = Preprocessor()
-#     d = p.add_metadata(["stratumid"], pd.DataFrame([]))
-
-
 def test_add_duration_adds_min_answer_time(df):
     p = Preprocessor()
     d = p.add_duration(df)
-    assert d["answer_time_min"].iloc[0] == pd.Timedelta(1000, unit="ms")
-    assert d["answer_time_min"].iloc[5] == pd.Timedelta(60000, unit="ms")
-    assert d["answer_time_min"].iloc[7] == pd.Timedelta(5000, unit="ms")
+    assert d["answer_time_min"].iloc[0] == 1.0
+    assert np.isclose(d["answer_time_min"].iloc[5], 60.0)
+    assert d["answer_time_min"].iloc[7] == 5.0
 
 
 def test_add_duration_adds_survey_start_time(df):
@@ -84,6 +83,13 @@ def test_add_duration_adds_survey_start_time(df):
     d = p.add_duration(df)
     assert d["survey_start_time"].iloc[0] == dt(12, 2, 0)
     assert d["survey_start_time"].iloc[7] == dt(12, 2, 0)
+
+
+def test_add_duration_adds_survey_duration(df):
+    p = Preprocessor()
+    d = p.add_duration(df)
+    assert d["survey_duration"].iloc[0] == 10.0
+    assert d["survey_duration"].iloc[7] == 5.0
 
 
 def test_add_duration_adds_to_keys(df):
