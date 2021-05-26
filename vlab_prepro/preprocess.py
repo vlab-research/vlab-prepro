@@ -1,8 +1,13 @@
 import json
 import logging
+import re
 
 import pandas as pd
 from toolz import curry
+
+
+class PreprocessingError(BaseException):
+    pass
 
 
 def wrap_empty(fn):
@@ -89,8 +94,21 @@ def drop_duplicated_users(form_keys, df):
     return df[~df.userid.isin(duplicated_users)]
 
 
-class PreprocessingError(BaseException):
-    pass
+def parse_number(s):
+    """Follows similar validation rules to the chatbot number validator
+
+    Note: these rules are pretty loose and maybe result in silly numbers.
+
+    """
+    try:
+        s = re.sub(",", "", s)
+        s = re.sub(r"\.", "", s)
+        s = s.strip()
+        return int(s)
+    except TypeError:
+        return s
+    except ValueError as e:
+        raise PreprocessingError(f"Cannot parse {s} as an integer.") from e
 
 
 class Preprocessor:
@@ -217,3 +235,7 @@ class Preprocessor:
             .reset_index()
             .sort_values(["userid"])
         )
+
+    @curry
+    def map_columns(self, cols, fn, df):
+        return df.assign(**{col: df[col].map(fn) for col in cols})

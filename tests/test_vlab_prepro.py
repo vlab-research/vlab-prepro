@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from vlab_prepro import PreprocessingError, Preprocessor
+from vlab_prepro import PreprocessingError, Preprocessor, parse_number
 
 
 def ts(h, m, s):
@@ -182,6 +182,18 @@ def test_columns_pivot_columns_pivots_by_user_survey_and_keeps_keys(form_df, df)
     for k in p.keys:
         assert k in d.columns
 
-    print(p.keys)
-
     assert "shortcode" in d.columns
+
+
+def test_parse_number_parses_strings_and_ints():
+    assert parse_number("500") == 500
+    assert parse_number("500,00") == 50000
+    assert parse_number("500.00") == 50000
+    assert parse_number(" ,500.00") == 50000
+    assert parse_number(50000) == 50000
+    assert parse_number(None) == None
+
+
+def test_parse_number_raises_on_not_parsable():
+    with pytest.raises(PreprocessingError):
+        parse_number("lskdjf")
