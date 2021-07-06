@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import re
@@ -114,6 +115,13 @@ def parse_number(s):
         return s
     except ValueError:
         return None
+
+
+def hash_int(i):
+    b = str(i).encode("ASCII")
+    h = hashlib.sha256()
+    h.update(b)
+    return h.hexdigest()
 
 
 class Preprocessor:
@@ -244,3 +252,7 @@ class Preprocessor:
     @curry
     def map_columns(self, cols, fn, df):
         return df.assign(**{col: df[col].map(fn) for col in cols})
+
+    @curry
+    def hash_userid(self, df):
+        return df.assign(userid=df.userid.map(hash_int))

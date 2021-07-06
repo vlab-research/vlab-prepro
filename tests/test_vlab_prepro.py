@@ -192,5 +192,15 @@ def test_parse_number_parses_strings_and_ints():
     assert parse_number("500.00") == 50000
     assert parse_number(" ,500.00") == 50000
     assert parse_number(50000) == 50000
-    assert parse_number(None) == None
-    assert parse_number("lskdjf") == None
+    assert parse_number(None) is None
+    assert parse_number("lskdjf") is None
+
+
+def test_hash_userid(df):
+    p = Preprocessor()
+    d = p.hash_userid(df)
+    ids = d.userid.unique()
+    hsh = '6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b'
+
+    assert hsh in ids
+    assert '1' not in ids
