@@ -91,11 +91,7 @@ def drop_duplicated_users(form_keys, df):
         .userid.unique()
     )
 
-    logging.warning(
-        f"Removing {len(duplicated_users)} users for duplication. "
-        "Make sure you have removed extra answers before performing "
-        "this action"
-    )
+    logging.warning(f"Removing {len(duplicated_users)} users for duplication.")
 
     return df[~df.userid.isin(duplicated_users)]
 
