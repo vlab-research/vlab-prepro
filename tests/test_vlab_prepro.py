@@ -20,6 +20,7 @@ def df():
     columns = [
         "surveyid",
         "userid",
+        "flowid",
         "question_ref",
         "question_idx",
         "response",
@@ -28,18 +29,18 @@ def df():
     ]
 
     data = [
-        ("a", "1", "A", 1, "response", ts(12, 2, 0), '{"stratumid": "Z"}'),
-        ("a", "1", "B", 2, "response", ts(12, 2, 1), '{"stratumid": "Z"}'),
-        ("a", "1", "C", 3, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
-        ("a", "1", "D", 4, "response", ts(12, 2, 10), '{"stratumid": "Z"}'),
-        ("b", "1", "A", 1, "response", ts(12, 2, 0), '{"stratumid": "Z"}'),
-        ("b", "1", "B", 2, "response", ts(12, 3, 0), '{"stratumid": "Z"}'),
-        ("a", "2", "A", 1, "response", ts(12, 2, 0), '{"stratumid": "X"}'),
-        ("a", "2", "B", 2, "response", ts(12, 2, 5), '{"stratumid": "X"}'),
-        ("c", "2", "B", 2, "response", ts(12, 2, 5), "{}"),
-        ("b", "3", "A", 1, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
-        ("b", "3", "A", 1, "response2", ts(12, 2, 6), '{"stratumid": "Z"}'),
-        ("c", "3", "A", 1, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
+        ("a", "1", 1, "A", 1, "response", ts(12, 2, 0), '{"stratumid": "Z"}'),
+        ("a", "1", 1, "B", 2, "response", ts(12, 2, 1), '{"stratumid": "Z"}'),
+        ("a", "1", 1, "C", 3, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
+        ("a", "1", 1, "D", 4, "response", ts(12, 2, 10), '{"stratumid": "Z"}'),
+        ("b", "1", 1, "A", 1, "response", ts(12, 2, 0), '{"stratumid": "Z"}'),
+        ("b", "1", 1, "B", 2, "response", ts(12, 3, 0), '{"stratumid": "Z"}'),
+        ("a", "2", 1, "A", 1, "response", ts(12, 2, 0), '{"stratumid": "X"}'),
+        ("a", "2", 1, "B", 2, "response", ts(12, 2, 5), '{"stratumid": "X"}'),
+        ("c", "2", 2, "C", 2, "response", ts(12, 2, 5), "{}"),
+        ("b", "3", 1, "A", 1, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
+        ("b", "3", 1, "A", 1, "response2", ts(12, 2, 6), '{"stratumid": "Z"}'),
+        ("c", "3", 1, "A", 1, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
     ]
 
     return pd.DataFrame(data, columns=columns)
@@ -192,8 +193,4 @@ def test_parse_number_parses_strings_and_ints():
     assert parse_number(" ,500.00") == 50000
     assert parse_number(50000) == 50000
     assert parse_number(None) == None
-
-
-def test_parse_number_raises_on_not_parsable():
-    with pytest.raises(PreprocessingError):
-        parse_number("lskdjf")
+    assert parse_number("lskdjf") == None

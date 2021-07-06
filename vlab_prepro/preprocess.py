@@ -82,8 +82,13 @@ def drop_duplicated_users(form_keys, df):
     # (i.e. shortcode! Or, if there are multiple shortcodes that shouldn't
     # be taken twice, some other metadata that the forms have to identify them)
 
-    keys = ["userid", "question_ref"] + list(form_keys)
-    duplicated_users = df[df.duplicated(subset=keys)].userid.unique()
+    # multiple flowids means user came back and took form again
+    keys = ["userid"] + list(form_keys)
+    duplicated_users = (
+        df.groupby(keys)
+        .filter(lambda df: df.flowid.unique().shape[0] > 1)
+        .userid.unique()
+    )
 
     logging.warning(
         f"Removing {len(duplicated_users)} users for duplication. "
@@ -107,8 +112,8 @@ def parse_number(s):
         return int(s)
     except TypeError:
         return s
-    except ValueError as e:
-        raise PreprocessingError(f"Cannot parse {s} as an integer.") from e
+    except ValueError:
+        return None
 
 
 class Preprocessor:
