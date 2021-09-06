@@ -15,8 +15,7 @@ def dt(h, m, s):
     return pd.Timestamp(datetime(2020, 1, 1, h, m, s), tz="UTC")
 
 
-@pytest.fixture
-def df():
+def make_df(data):
     columns = [
         "surveyid",
         "userid",
@@ -28,6 +27,11 @@ def df():
         "metadata",
     ]
 
+    return pd.DataFrame(data, columns=columns)
+
+
+@pytest.fixture
+def df():
     data = [
         ("a", "1", 1, "A", 1, "response", ts(12, 2, 0), '{"stratumid": "Z"}'),
         ("a", "1", 1, "B", 2, "response", ts(12, 2, 1), '{"stratumid": "Z"}'),
@@ -43,7 +47,7 @@ def df():
         ("c", "3", 1, "A", 1, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
     ]
 
-    return pd.DataFrame(data, columns=columns)
+    return make_df(data)
 
 
 @pytest.fixture
@@ -168,7 +172,9 @@ def test_add_percentage_valid(df):
     assert "invalid_answer_count" in p.keys
 
 
-def test_columns_pivot_columns_pivots_by_user_survey_and_keeps_keys(form_df, df):
+def test_columns_pivot_columns_pivots_by_user_survey_if_form_data_and_keeps_keys(
+    form_df, df
+):
     p = Preprocessor()
     df = p.add_form_data(form_df, df)
     df = p.count_invalid(df)
@@ -186,6 +192,76 @@ def test_columns_pivot_columns_pivots_by_user_survey_and_keeps_keys(form_df, df)
     assert "shortcode" in d.columns
 
 
+def test_columns_remove_form_data_removes_form_keys(df, form_df):
+    p = Preprocessor()
+    df = p.add_form_data(form_df, df)
+    assert "surveyid" in df.columns
+
+    df = p.remove_form_data(df)
+    assert "surveyid" not in df.columns
+
+
+def test_columns_pivot_columns_pivots_by_just_user_if_no_form_data():
+    data = [
+        ("a", "1", 1, "A", 1, "response", ts(12, 2, 0), '{"stratumid": "Z"}'),
+        ("a", "1", 1, "B", 2, "response", ts(12, 2, 1), '{"stratumid": "Z"}'),
+        ("a", "1", 1, "C", 3, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
+        ("b", "1", 1, "D", 1, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
+        ("b", "1", 1, "E", 1, "response2", ts(12, 2, 6), '{"stratumid": "Z"}'),
+    ]
+
+    df = make_df(data)
+
+    p = Preprocessor()
+    df = p.count_invalid(df)
+    df = p.keep_final_answer(df)
+    d = p.pivot("response", df)
+
+    assert "surveyid" not in d.columns
+    assert d.shape[0] == 1
+
+
+def test_columns_pivot_columns_pivots_by_just_user_if_form_data_removed(form_df):
+    data = [
+        ("a", "1", 1, "A", 1, "response", ts(12, 2, 0), '{"stratumid": "Z"}'),
+        ("a", "1", 1, "B", 2, "response", ts(12, 2, 1), '{"stratumid": "Z"}'),
+        ("a", "1", 1, "C", 3, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
+        ("b", "1", 1, "D", 1, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
+        ("b", "1", 1, "E", 1, "response2", ts(12, 2, 6), '{"stratumid": "Z"}'),
+    ]
+
+    df = make_df(data)
+
+    p = Preprocessor()
+    df = p.add_form_data(form_df, df)
+    df = p.count_invalid(df)
+    df = p.keep_final_answer(df)
+    df = p.remove_form_data(df)
+    d = p.pivot("response", df)
+
+    assert "surveyid" not in d.columns
+    assert d.shape[0] == 1
+
+
+def test_columns_pivot_columns_raises_exception_if_duplicated_questions(form_df):
+    data = [
+        ("a", "1", 1, "A", 1, "response", ts(12, 2, 0), '{"stratumid": "Z"}'),
+        ("a", "1", 1, "B", 2, "response", ts(12, 2, 1), '{"stratumid": "Z"}'),
+        ("a", "1", 1, "C", 3, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
+        ("b", "1", 1, "D", 1, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
+        ("b", "1", 1, "C", 1, "response2", ts(12, 2, 6), '{"stratumid": "Z"}'),
+    ]
+
+    df = make_df(data)
+
+    p = Preprocessor()
+    df = p.count_invalid(df)
+    df = p.keep_final_answer(df)
+
+    with pytest.raises(PreprocessingError):
+        p.pivot("response", df)
+
+
 def test_parse_number_parses_strings_and_ints():
     assert parse_number("500") == 500
     assert parse_number("500,00") == 50000
@@ -200,7 +276,7 @@ def test_hash_userid(df):
     p = Preprocessor()
     d = p.hash_userid(df)
     ids = d.userid.unique()
-    hsh = '6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b'
+    hsh = "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
 
     assert hsh in ids
-    assert '1' not in ids
+    assert "1" not in ids

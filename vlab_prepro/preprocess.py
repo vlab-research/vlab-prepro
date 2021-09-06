@@ -123,12 +123,24 @@ def hash_int(i):
 class Preprocessor:
     def __init__(self):
         self.keys = set()
+        self.form_df = None
 
     @curry
     def add_form_data(self, form_df, df):
         new_form_df = flatten_dict("metadata", form_df)
+        self.form_df = new_form_df
         self.keys = self.keys | set(new_form_df.columns)
         return df.merge(new_form_df, on="surveyid")
+
+    @curry
+    def remove_form_data(self, df):
+        if self.form_df is None:
+            raise PreprocessingError("No form data to remove from the dataframe.")
+
+        df = df.drop(self.form_df.columns, axis=1)
+        self.keys = self.keys - set(self.form_df.columns)
+        self.form_df = None
+        return df
 
     @curry
     def add_metadata(self, keys, df):
@@ -238,12 +250,27 @@ class Preprocessor:
 
     @curry
     def pivot(self, answer_column, df):
-        keys = {"userid", "surveyid"} | self.keys
-        return (
-            df.pivot(keys, "question_ref", answer_column)
-            .reset_index()
-            .sort_values(["userid"])
-        )
+        keys = {"userid"} | self.keys
+
+        if "surveyid" not in keys:
+            logging.warning(
+                "Pivoting without survey information. "
+                "Make sure question_refs are unique across surveys "
+                "as all surveys will be collapsed"
+            )
+
+        try:
+            return (
+                df.pivot(keys, "question_ref", answer_column)
+                .reset_index()
+                .sort_values(["userid"])
+            )
+        except ValueError as e:
+            raise PreprocessingError(
+                "Could not pivot. Potentially you should use add_form_data "
+                "to add surveyid and ensure that each user/survey is a unique line "
+                "or remove duplicated questions or duplicated users"
+            ) from e
 
     @curry
     def map_columns(self, cols, fn, df):
