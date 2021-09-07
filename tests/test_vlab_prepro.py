@@ -37,11 +37,11 @@ def df():
         ("a", "1", 1, "B", 2, "response", ts(12, 2, 1), '{"stratumid": "Z"}'),
         ("a", "1", 1, "C", 3, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
         ("a", "1", 1, "D", 4, "response", ts(12, 2, 10), '{"stratumid": "Z"}'),
-        ("b", "1", 1, "A", 1, "response", ts(12, 2, 0), '{"stratumid": "Z"}'),
-        ("b", "1", 1, "B", 2, "response", ts(12, 3, 0), '{"stratumid": "Z"}'),
+        ("b", "1", 1, "A", 1, "response", ts(12, 3, 0), '{"stratumid": "Z"}'),
+        ("b", "1", 1, "B", 2, "response", ts(12, 4, 0), '{"stratumid": "Z"}'),
         ("a", "2", 1, "A", 1, "response", ts(12, 2, 0), '{"stratumid": "X"}'),
         ("a", "2", 1, "B", 2, "response", ts(12, 2, 5), '{"stratumid": "X"}'),
-        ("c", "2", 2, "C", 2, "response", ts(12, 2, 5), "{}"),
+        ("c", "2", 2, "C", 2, "response", ts(12, 3, 5), "{}"),
         ("b", "3", 1, "A", 1, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
         ("b", "3", 1, "A", 1, "response2", ts(12, 2, 6), '{"stratumid": "Z"}'),
         ("c", "3", 1, "A", 1, "response", ts(12, 2, 5), '{"stratumid": "Z"}'),
@@ -75,26 +75,40 @@ def test_add_metadata_ads_single_key(df):
     assert "stratumid" in p.keys
 
 
-def test_add_duration_adds_min_answer_time(df):
+def test_add_duration_adds_answer_time_min_from_all_surveys(df):
     p = Preprocessor()
     d = p.add_duration(df)
-    assert d["answer_time_min"].iloc[0] == 1.0
-    assert np.isclose(d["answer_time_min"].iloc[5], 60.0)
-    assert d["answer_time_min"].iloc[7] == 5.0
+
+    s = d.groupby("userid").apply(lambda df: df.answer_time_min.iloc[0])
+    assert s["1"] == 1.0
+    assert s["2"] == 5.0
 
 
-def test_add_duration_adds_survey_start_time(df):
+def test_add_duration_adds_survey_start_time_from_all_surveys(df):
     p = Preprocessor()
     d = p.add_duration(df)
     assert d["survey_start_time"].iloc[0] == dt(12, 2, 0)
     assert d["survey_start_time"].iloc[7] == dt(12, 2, 0)
 
 
-def test_add_duration_adds_survey_duration(df):
+def test_add_duration_adds_survey_duration_all_surveys_if_not_form_data(df):
     p = Preprocessor()
     d = p.add_duration(df)
-    assert d["survey_duration"].iloc[0] == 10.0
-    assert d["survey_duration"].iloc[7] == 5.0
+    s = d.groupby("userid").apply(lambda df: df.survey_duration.iloc[0])
+    assert s["1"] == 120.0
+    assert s["2"] == 65.0
+    assert s["3"] == 1.0
+
+
+def test_add_duration_adds_survey_duration_per_survey_if_form_data(df, form_df):
+    p = Preprocessor()
+    df = p.add_form_data(form_df, df)
+    d = p.add_duration(df)
+    print(d[["userid", "surveyid", "survey_duration"]])
+
+    s = d.groupby(["userid", "surveyid"]).apply(lambda df: df.survey_duration.iloc[0])
+    assert s[("1", "a")] == 10.0
+    assert s[("1", "b")] == 60.0
 
 
 def test_add_duration_adds_to_keys(df):
@@ -237,6 +251,7 @@ def test_columns_pivot_columns_pivots_by_just_user_if_form_data_removed(form_df)
     df = p.count_invalid(df)
     df = p.keep_final_answer(df)
     df = p.remove_form_data(df)
+    df = p.add_duration(df)
     d = p.pivot("response", df)
 
     assert "surveyid" not in d.columns

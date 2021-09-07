@@ -1,4 +1,4 @@
-__version__ = "0.3.4"
+__version__ = "0.3.5"
 
 from .preprocess import PreprocessingError, Preprocessor, parse_number
 

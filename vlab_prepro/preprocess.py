@@ -122,7 +122,7 @@ def hash_int(i):
 
 class Preprocessor:
     def __init__(self):
-        self.keys = set()
+        self.keys = {"userid"}
         self.form_df = None
 
     @curry
@@ -162,7 +162,7 @@ class Preprocessor:
             df = self.parse_timestamp(df)
 
         df = (
-            df.groupby(["userid", "surveyid"], dropna=False)
+            df.groupby(list(self.keys), dropna=False)
             .apply(_add_duration)
             .reset_index(drop=True)
         )
@@ -212,11 +212,16 @@ class Preprocessor:
         if "final_answer" not in df.columns:
             df = self.add_final_answer(df)
 
-        df = df.groupby("userid").apply(
-            lambda df: df.assign(
-                invalid_answer_percentage=(~df.final_answer).mean(),
-                invalid_answer_count=df.final_answer.count() - df.final_answer.sum(),
+        df = (
+            df.groupby("userid")
+            .apply(
+                lambda df: df.assign(
+                    invalid_answer_percentage=(~df.final_answer).mean(),
+                    invalid_answer_count=df.final_answer.count()
+                    - df.final_answer.sum(),
+                )
             )
+            .reset_index(drop=True)
         )
 
         self.keys.add("invalid_answer_percentage")
@@ -250,7 +255,7 @@ class Preprocessor:
 
     @curry
     def pivot(self, answer_column, df):
-        keys = {"userid"} | self.keys
+        keys = self.keys
 
         if "surveyid" not in keys:
             logging.warning(
