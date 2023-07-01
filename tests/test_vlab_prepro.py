@@ -151,6 +151,17 @@ def test_add_form_data_adds_metadata(df, form_df):
     assert "shortcode" in p.keys
 
 
+def test_add_form_data_adds_metadata_with_prefix_when_given(df, form_df):
+    p = Preprocessor()
+    f = p.add_form_data(form_df, prefix="form")
+    d = f(df)
+    assert "form_wave" in d.columns
+    assert d[d.surveyid == "a"]["form_wave"].iloc[0] == "0"
+    assert pd.isna(d[d.surveyid == "b"]["form_wave"].iloc[0])
+    assert "form_wave" in p.keys
+    assert "shortcode" in p.keys
+
+
 def test_keep_final_answer_removes_previous_answers(df):
     p = Preprocessor()
     d = p.keep_final_answer(df)

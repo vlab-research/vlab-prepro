@@ -12,22 +12,25 @@ class PreprocessingError(BaseException):
 
 
 def wrap_empty(fn):
-    def _wrapper(df):
+    def _wrapper(df, *args, **kwargs):
         if df.shape[0] == 0:
             return None
-        return fn(df)
+        return fn(df, *args, **kwargs)
 
     return _wrapper
 
 
-def _flatten_dict(col, r):
+def _flatten_dict(col, r, prefix):
     for k, v in json.loads(r[col]).items():
-        r[k] = v
+        if prefix is None:
+            r[k] = v
+        else:
+            r[f"{prefix}_{k}"] = v
     return r
 
 
-def flatten_dict(col, df):
-    return df.apply(lambda r: _flatten_dict(col, r), 1).drop(columns=[col])
+def flatten_dict(col, df, prefix=None):
+    return df.apply(lambda r: _flatten_dict(col, r, prefix), 1).drop(columns=[col])
 
 
 def _new_cols(left, right):
@@ -62,6 +65,11 @@ def add_final_answer(df):
     return df
 
 
+@curry
+def _assign(name, fn, tindex, d):
+    return d.assign(**{name: fn(d.index[0])})
+
+
 def _add_time_indicators(indicators, df):
     tindex = "survey_start_time"
 
@@ -70,11 +78,11 @@ def _add_time_indicators(indicators, df):
 
     for name, frame, fn in indicators:
         df = (
-            df.resample(frame, on=tindex)
-            .apply(wrap_empty(lambda d: d.assign(**{name: fn(d[tindex].iloc[0])})))
-            .reset_index(drop=True)
+            df.set_index(tindex)
+            .resample(frame)
+            .apply(wrap_empty(_assign(name, fn, tindex)))
+            .reset_index()
         )
-
     return df
 
 
@@ -126,8 +134,8 @@ class Preprocessor:
         self.form_df = None
 
     @curry
-    def add_form_data(self, form_df, df):
-        new_form_df = flatten_dict("metadata", form_df)
+    def add_form_data(self, form_df, df, prefix=None):
+        new_form_df = flatten_dict("metadata", form_df, prefix)
         self.form_df = new_form_df
         self.keys = self.keys | set(new_form_df.columns)
         return df.merge(new_form_df, on="surveyid")
@@ -151,7 +159,6 @@ class Preprocessor:
 
     @curry
     def parse_timestamp(self, df):
-
         # NOTE: If ISO has TZ info, then it will be TZ aware, otherwise
         # it will be TZ naive.
         return df.assign(timestamp=df.timestamp.map(lambda x: pd.Timestamp(x)))
@@ -266,7 +273,7 @@ class Preprocessor:
 
         try:
             return (
-                df.pivot(keys, "question_ref", answer_column)
+                df.pivot(index=keys, columns="question_ref", values=answer_column)
                 .reset_index()
                 .sort_values(["userid"])
             )
