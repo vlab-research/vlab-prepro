@@ -152,7 +152,13 @@ class Preprocessor:
 
     @curry
     def add_metadata(self, keys, df):
+        question_refs = df.question_ref.unique()
         for key in keys:
+            if key in question_refs:
+                raise PreprocessingError(
+                    f"Trying to add metadata that already exists as a column: {key}"
+                )
+
             df[key] = df.metadata.map(lambda x: json.loads(x).get(key))
             self.keys.add(key)
         return df

@@ -75,6 +75,13 @@ def test_add_metadata_ads_single_key(df):
     assert "stratumid" in p.keys
 
 
+def test_add_metadata_fails_if_column_exists(df):
+    df['metadata'] = df.metadata.map(lambda x: '{"A": "foo"}')
+    p = Preprocessor()
+    with pytest.raises(PreprocessingError):
+         p.add_metadata(["A"], df)
+
+
 def test_add_duration_adds_answer_time_min_from_all_surveys(df):
     p = Preprocessor()
     d = p.add_duration(df)
