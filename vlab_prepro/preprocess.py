@@ -59,7 +59,7 @@ def add_final_answer(df):
     df = df.sort_values("timestamp")
     df["final_answer"] = True
     df.loc[
-        df.duplicated(["userid", "surveyid", "question_idx"], keep="last"),
+        df.duplicated(["userid", "surveyid", "question_ref"], keep="last"),
         "final_answer",
     ] = False
     return df
