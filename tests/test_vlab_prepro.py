@@ -1,10 +1,12 @@
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from vlab_prepro import PreprocessingError, Preprocessor, parse_number
+from vlab_prepro import PreprocessingError, Preprocessor, compute_seed, parse_number
 
 
 def ts(h, m, s):
@@ -313,3 +315,90 @@ def test_hash_userid(df):
 
     assert hsh in ids
     assert "1" not in ids
+
+
+@pytest.fixture
+def js_test_cases():
+    test_file = Path(__file__).parent / "seed_test_cases.json"
+    with open(test_file) as f:
+        return json.load(f)
+
+
+def test_compute_seed_matches_javascript(js_test_cases):
+    """Verify Python compute_seed matches JavaScript implementation."""
+    for tc in js_test_cases["seedTestCases"]:
+        result = compute_seed(tc["seed"], tc["n"], tc["m"])
+        assert result == tc["result"], (
+            f"Mismatch for seed={tc['seed']}, n={tc['n']}, m={tc['m']}: "
+            f"Python={result}, JavaScript={tc['result']}"
+        )
+
+
+def test_compute_seed_returns_value_in_range():
+    """Verify compute_seed always returns value between 1 and n."""
+    seeds = [2960024492, 1171948497, 837565861]
+    for seed in seeds:
+        for n in [2, 3, 5, 10, 100]:
+            for m in [0, 1, 2]:
+                result = compute_seed(seed, n, m)
+                assert 1 <= result <= n, f"Result {result} out of range [1, {n}]"
+
+
+def test_compute_seed_deterministic():
+    """Verify same inputs always produce same output."""
+    seed, n, m = 2960024492, 5, 2
+    results = [compute_seed(seed, n, m) for _ in range(10)]
+    assert all(r == results[0] for r in results)
+
+
+def test_compute_seed_key_format():
+    """Verify key string format produces same results as n/m parameters."""
+    seed = 2960024492
+
+    # seed_N format
+    assert compute_seed(seed, key="seed_2") == compute_seed(seed, 2)
+    assert compute_seed(seed, key="seed_3") == compute_seed(seed, 3)
+    assert compute_seed(seed, key="seed_10") == compute_seed(seed, 10)
+
+    # seed_N_M format
+    assert compute_seed(seed, key="seed_2_1") == compute_seed(seed, 2, m=1)
+    assert compute_seed(seed, key="seed_5_2") == compute_seed(seed, 5, m=2)
+    assert compute_seed(seed, key="seed_3_3") == compute_seed(seed, 3, m=3)
+
+
+def test_compute_seed_key_format_against_javascript(js_test_cases):
+    """Verify key format matches JavaScript implementation."""
+    for tc in js_test_cases["seedTestCases"]:
+        if tc["m"] == 0:
+            key = f"seed_{tc['n']}"
+        else:
+            key = f"seed_{tc['n']}_{tc['m']}"
+
+        result = compute_seed(tc["seed"], key=key)
+        assert result == tc["result"], (
+            f"Mismatch for key={key}, seed={tc['seed']}: "
+            f"Python={result}, JavaScript={tc['result']}"
+        )
+
+
+def test_compute_seed_invalid_key_raises():
+    """Verify invalid key formats raise ValueError."""
+    seed = 2960024492
+
+    with pytest.raises(ValueError):
+        compute_seed(seed, key="invalid")
+
+    with pytest.raises(ValueError):
+        compute_seed(seed, key="seed_")
+
+    with pytest.raises(ValueError):
+        compute_seed(seed, key="seed_abc")
+
+    with pytest.raises(ValueError):
+        compute_seed(seed, key="2_3")
+
+
+def test_compute_seed_requires_n_or_key():
+    """Verify error when neither n nor key is provided."""
+    with pytest.raises(ValueError):
+        compute_seed(2960024492)

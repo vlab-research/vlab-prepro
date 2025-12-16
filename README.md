@@ -61,3 +61,47 @@ pipe(responses,
      p.pivot('translated_response')
 )
 ```
+
+## Computing Seed Values
+
+The survey platform uses randomization seeds to assign respondents to treatment arms or show randomized content. Each respondent's seed is deterministically generated from their user ID and form ID, and is included in the data export.
+
+To calculate the actual randomization value (e.g., which treatment arm a respondent was assigned to), use `compute_seed`:
+
+```python
+from vlab_prepro import compute_seed
+
+# If your survey used seed_3 for a 3-arm trial:
+df['treatment_arm'] = df['seed'].apply(lambda s: compute_seed(s, key="seed_3"))
+
+# Or equivalently, using n parameter:
+df['treatment_arm'] = df['seed'].apply(lambda s: compute_seed(s, n=3))
+```
+
+### Multiple randomizations
+
+If your survey used multiple independent randomizations, they would have used different `seed_N_M` values where M creates distinct random sequences:
+
+```python
+# First randomization: seed_2 (coin flip for treatment/control)
+df['treatment'] = df['seed'].apply(lambda s: compute_seed(s, key="seed_2"))
+
+# Second randomization: seed_3_1 (3-way split, independent of first)
+df['message_variant'] = df['seed'].apply(lambda s: compute_seed(s, key="seed_3_1"))
+
+# Third randomization: seed_2_2 (another coin flip, independent of both above)
+df['image_shown'] = df['seed'].apply(lambda s: compute_seed(s, key="seed_2_2"))
+```
+
+### Function signature
+
+```python
+compute_seed(seed: int, n: int = None, m: int = 0, *, key: str = None) -> int
+```
+
+- `seed`: The base seed from your data export (32-bit integer)
+- `n`: Range for result (returns 1 to n inclusive)
+- `m`: Rehash count for independent random values (default 0)
+- `key`: Alternative format string like `"seed_3"` or `"seed_3_1"`
+
+Returns an integer from 1 to n (inclusive).

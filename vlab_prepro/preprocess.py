@@ -3,6 +3,7 @@ import json
 import logging
 import re
 
+import farmhash
 import pandas as pd
 from toolz import curry
 
@@ -126,6 +127,54 @@ def hash_int(i):
     h = hashlib.sha256()
     h.update(b)
     return h.hexdigest()
+
+
+def compute_seed(seed: int, n: int = None, m: int = 0, *, key: str = None) -> int:
+    """Compute seed value matching the survey system's seed_N_M format.
+
+    This replicates the JavaScript implementation used in the survey chatbot,
+    allowing researchers to calculate treatment arms and randomization groups
+    from the base seed in their exported data.
+
+    Can be called with either explicit n/m parameters or a key string.
+
+    Args:
+        seed: Base seed from survey data export (32-bit integer)
+        n: Range for the result (returns value from 1 to n inclusive)
+        m: Number of rehashes for distinct seeds (default 0).
+           Use different m values to get independent random values
+           from the same base seed.
+        key: Alternative to n/m - a string in format "seed_N" or "seed_N_M"
+             (e.g., "seed_3", "seed_5_2")
+
+    Returns:
+        Integer from 1 to n (inclusive)
+
+    Examples:
+        >>> compute_seed(2960024492, 2)  # coin flip
+        1
+        >>> compute_seed(2960024492, 3)  # 3-arm trial
+        3
+        >>> compute_seed(2960024492, 2, m=1)  # second coin flip
+        1
+        >>> compute_seed(2960024492, key="seed_3")  # using key format
+        3
+        >>> compute_seed(2960024492, key="seed_2_1")  # key with rehash
+        1
+    """
+    if key is not None:
+        match = re.match(r"seed_(\d+)(?:_(\d+))?$", key)
+        if not match:
+            raise ValueError(f"Invalid key format: {key}. Expected 'seed_N' or 'seed_N_M'")
+        n = int(match.group(1))
+        m = int(match.group(2)) if match.group(2) else 0
+    elif n is None:
+        raise ValueError("Must provide either 'n' or 'key' parameter")
+
+    for _ in range(m):
+        seed = farmhash.fingerprint32(str(seed))
+
+    return (seed % n) + 1
 
 
 class Preprocessor:

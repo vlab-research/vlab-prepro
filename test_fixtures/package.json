@@ -1,0 +1,12 @@
+{
+  "name": "vlab-prepro-test-fixtures",
+  "version": "1.0.0",
+  "description": "Generates test fixtures for vlab_prepro by running the canonical JavaScript implementation",
+  "private": true,
+  "scripts": {
+    "generate": "node generate_seed_test_cases.js"
+  },
+  "dependencies": {
+    "farmhash": "^3.3.1"
+  }
+}
