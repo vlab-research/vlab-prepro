@@ -1,4 +1,5 @@
 import json
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import pandas as pd
 import pytest
 
 from vlab_prepro import PreprocessingError, Preprocessor, compute_seed, parse_number
+from vlab_prepro.preprocess import add_final_answer, flatten_dict, wrap_empty
 
 
 def ts(h, m, s):
@@ -77,11 +79,13 @@ def test_add_metadata_ads_single_key(df):
     assert "stratumid" in p.keys
 
 
-def test_add_metadata_fails_if_column_exists(df):
+def test_add_metadata_prefixes_conflicting_key(df):
     df['metadata'] = df.metadata.map(lambda x: '{"A": "foo"}')
     p = Preprocessor()
-    with pytest.raises(PreprocessingError):
-         p.add_metadata(["A"], df)
+    d = p.add_metadata(["A"], df)
+    assert "metadata_A" in d.columns
+    assert d["metadata_A"].iloc[0] == "foo"
+    assert "metadata_A" in p.keys
 
 
 def test_add_duration_adds_answer_time_min_from_all_surveys(df):
@@ -402,3 +406,313 @@ def test_compute_seed_requires_n_or_key():
     """Verify error when neither n nor key is provided."""
     with pytest.raises(ValueError):
         compute_seed(2960024492)
+
+
+# ---------------------------------------------------------------------------
+# map_columns
+# ---------------------------------------------------------------------------
+
+
+def test_map_columns_transforms_specified_columns(df):
+    p = Preprocessor()
+    d = p.map_columns(["question_idx"], int, df)
+    assert d["question_idx"].dtype == int or d["question_idx"].iloc[0] == 1
+    # Other columns are untouched
+    assert "response" in d.columns
+    assert d["response"].iloc[0] == "response"
+
+
+def test_map_columns_multiple_columns(df):
+    p = Preprocessor()
+    d = p.map_columns(["question_idx", "flowid"], lambda x: x * 10, df)
+    assert d["question_idx"].iloc[0] == 10
+    assert d["flowid"].iloc[0] == 10
+
+
+# ---------------------------------------------------------------------------
+# flatten_dict
+# ---------------------------------------------------------------------------
+
+
+def test_flatten_dict_expands_json_keys_as_columns():
+    data = pd.DataFrame({
+        "id": [1, 2],
+        "info": ['{"color": "red", "size": "L"}', '{"color": "blue", "size": "M"}'],
+    })
+    result = flatten_dict("info", data)
+    assert "color" in result.columns
+    assert "size" in result.columns
+    assert "info" not in result.columns
+    assert result["color"].iloc[0] == "red"
+    assert result["size"].iloc[1] == "M"
+
+
+def test_flatten_dict_with_prefix():
+    data = pd.DataFrame({
+        "id": [1],
+        "meta": ['{"wave": "1"}'],
+    })
+    result = flatten_dict("meta", data, prefix="form")
+    assert "form_wave" in result.columns
+    assert "wave" not in result.columns
+    assert "meta" not in result.columns
+
+
+def test_flatten_dict_missing_key_produces_none():
+    data = pd.DataFrame({
+        "id": [1, 2],
+        "meta": ['{"wave": "1"}', '{}'],
+    })
+    result = flatten_dict("meta", data)
+    assert "wave" in result.columns
+    # Second row has no "wave" key; should be NaN/None
+    assert pd.isna(result["wave"].iloc[1])
+
+
+# ---------------------------------------------------------------------------
+# wrap_empty
+# ---------------------------------------------------------------------------
+
+
+def test_wrap_empty_returns_none_for_empty_dataframe():
+    sentinel = object()
+
+    def fn(df):
+        return sentinel
+
+    wrapped = wrap_empty(fn)
+    empty = pd.DataFrame(columns=["a", "b"])
+    assert wrapped(empty) is None
+
+
+def test_wrap_empty_calls_fn_for_nonempty():
+    called_with = []
+
+    def fn(df, *args, **kwargs):
+        called_with.append(df)
+        return df
+
+    wrapped = wrap_empty(fn)
+    nonempty = pd.DataFrame({"a": [1]})
+    result = wrapped(nonempty)
+    assert len(called_with) == 1
+    assert result is not None
+
+
+# ---------------------------------------------------------------------------
+# add_duration quantile columns
+# ---------------------------------------------------------------------------
+
+
+def test_add_duration_adds_answer_time_median(df):
+    p = Preprocessor()
+    d = p.add_duration(df)
+    # user "1" across all surveys: timestamps are 12:02:00, 12:02:01, 12:02:05,
+    # 12:02:10, 12:03:00, 12:04:00 → diffs (seconds): 1, 4, 5, 50, 60
+    # median (0.5 quantile) of [1, 4, 5, 50, 60] = 5.0
+    u1 = d[d.userid == "1"]["answer_time_median"].iloc[0]
+    assert u1 == 5.0
+
+
+def test_add_duration_adds_answer_time_75_and_90(df):
+    p = Preprocessor()
+    d = p.add_duration(df)
+    # user "1" diffs: [1, 4, 5, 50, 60]
+    # p75 of [1, 4, 5, 50, 60] = 50 + 0.75*(60-50)... let pandas decide the exact value.
+    # We just check the column exists and values are positive.
+    assert "answer_time_75" in d.columns
+    assert "answer_time_90" in d.columns
+    u1_75 = d[d.userid == "1"]["answer_time_75"].iloc[0]
+    u1_90 = d[d.userid == "1"]["answer_time_90"].iloc[0]
+    assert u1_75 > 0
+    assert u1_90 > 0
+    assert u1_90 >= u1_75
+
+
+def test_add_duration_single_answer_has_nan_time_between():
+    """A user with exactly one response row has no inter-answer gaps: min is NaN."""
+    data = [
+        ("a", "solo", 1, "A", 1, "resp", ts(10, 0, 0), '{}'),
+    ]
+    single_df = make_df(data)
+    p = Preprocessor()
+    d = p.add_duration(single_df)
+    assert math.isnan(d["answer_time_min"].iloc[0])
+
+
+# ---------------------------------------------------------------------------
+# add_time_indicators month
+# ---------------------------------------------------------------------------
+
+
+def test_add_time_indicators_adds_correct_month(df):
+    """
+    A January timestamp should produce month == 1.
+    The df fixture uses 2020-01-01 timestamps → month 1.
+    """
+    p = Preprocessor()
+    df_dur = p.add_duration(df)
+    d = p.add_time_indicators(["month"], df_dur)
+    assert "month" in d.columns
+    assert d["month"].iloc[0] == 1
+    assert "month" in p.keys
+
+
+# ---------------------------------------------------------------------------
+# add_metadata multiple keys
+# ---------------------------------------------------------------------------
+
+
+def test_add_metadata_adds_multiple_keys(df):
+    p = Preprocessor()
+    # Both stratumid and a hypothetical "extra" key
+    df2 = df.copy()
+    df2["metadata"] = df2["metadata"].map(
+        lambda x: json.dumps({**json.loads(x), "region": "North"})
+    )
+    d = p.add_metadata(["stratumid", "region"], df2)
+    assert "stratumid" in d.columns
+    assert "region" in d.columns
+    assert "stratumid" in p.keys
+    assert "region" in p.keys
+
+
+# ---------------------------------------------------------------------------
+# parse_timestamp
+# ---------------------------------------------------------------------------
+
+
+def test_parse_timestamp_handles_tz_naive():
+    """ISO string without timezone info → tz-naive Timestamp."""
+    data = make_df([
+        ("a", "1", 1, "A", 1, "r", "2020-01-01T12:00:00", '{}'),
+    ])
+    p = Preprocessor()
+    d = p.parse_timestamp(data)
+    ts_val = d["timestamp"].iloc[0]
+    assert isinstance(ts_val, pd.Timestamp)
+    assert ts_val.tzinfo is None
+
+
+def test_parse_timestamp_handles_tz_aware():
+    """ISO string with +00:00 → tz-aware Timestamp."""
+    data = make_df([
+        ("a", "1", 1, "A", 1, "r", "2020-01-01T12:00:00+00:00", '{}'),
+    ])
+    p = Preprocessor()
+    d = p.parse_timestamp(data)
+    ts_val = d["timestamp"].iloc[0]
+    assert isinstance(ts_val, pd.Timestamp)
+    assert ts_val.tzinfo is not None
+
+
+def test_parse_timestamp_idempotent(df):
+    """Calling parse_timestamp twice should not raise and should be idempotent."""
+    p = Preprocessor()
+    d1 = p.parse_timestamp(df)
+    d2 = p.parse_timestamp(d1)
+    assert d1["timestamp"].iloc[0] == d2["timestamp"].iloc[0]
+
+
+# ---------------------------------------------------------------------------
+# hash_int
+# ---------------------------------------------------------------------------
+
+
+from vlab_prepro.preprocess import hash_int
+
+
+def test_hash_int_returns_hex_string():
+    result = hash_int(1)
+    assert isinstance(result, str)
+    # SHA-256 produces 64-char hex
+    int(result, 16)  # raises if not hex
+
+
+def test_hash_int_deterministic():
+    assert hash_int(42) == hash_int(42)
+
+
+def test_hash_int_different_inputs_differ():
+    assert hash_int(1) != hash_int(2)
+
+
+# ---------------------------------------------------------------------------
+# add_final_answer standalone (module-level function)
+# ---------------------------------------------------------------------------
+
+
+def test_add_final_answer_marks_earlier_answers_false():
+    data = make_df([
+        ("b", "3", 1, "A", 1, "response",  ts(12, 2, 5), '{}'),
+        ("b", "3", 1, "A", 1, "response2", ts(12, 2, 6), '{}'),
+    ])
+    result = add_final_answer(data)
+    result = result.sort_values("timestamp").reset_index(drop=True)
+    assert result["final_answer"].iloc[0] == False  # earlier → False
+    assert result["final_answer"].iloc[1] == True   # later (last) → True
+
+
+def test_add_final_answer_all_unique_are_true():
+    data = make_df([
+        ("a", "1", 1, "A", 1, "resp_a", ts(10, 0, 0), '{}'),
+        ("a", "1", 1, "B", 2, "resp_b", ts(10, 0, 5), '{}'),
+    ])
+    result = add_final_answer(data)
+    assert result["final_answer"].all()
+
+
+# ---------------------------------------------------------------------------
+# drop_users_without edge case
+# ---------------------------------------------------------------------------
+
+
+def test_drop_users_without_removes_all_rows_for_user():
+    """A user with even one NaN row for the key loses ALL their rows."""
+    data = make_df([
+        ("a", "u1", 1, "A", 1, "r", ts(10, 0, 0), '{"key": "val"}'),
+        ("a", "u1", 1, "B", 2, "r", ts(10, 0, 5), '{"key": "val"}'),
+        ("b", "u2", 1, "A", 1, "r", ts(10, 0, 0), '{}'),   # u2 missing key
+        ("b", "u2", 1, "B", 2, "r", ts(10, 0, 5), '{}'),   # u2 missing key
+    ])
+    p = Preprocessor()
+    df = p.add_metadata(["key"], data)
+    result = p.drop_users_without("key", df)
+    assert "u2" not in result.userid.unique()
+    assert "u1" in result.userid.unique()
+    assert result[result.userid == "u1"].shape[0] == 2
+
+
+# ---------------------------------------------------------------------------
+# count_invalid exact values
+# ---------------------------------------------------------------------------
+
+
+def test_count_invalid_exact_values(df):
+    """
+    user "3" has 3 rows:
+      ("b", "3", q_A → response  @ ts 12:02:05)
+      ("b", "3", q_A → response2 @ ts 12:02:06)  ← duplicate, first gets False
+      ("c", "3", q_A → response  @ ts 12:02:05)
+    After add_final_answer: 1 False out of 3 rows.
+    invalid_answer_percentage = 1/3, invalid_answer_count = 1.
+    """
+    p = Preprocessor()
+    d = p.count_invalid(df)
+    u3 = d[d.userid == "3"].iloc[0]
+    assert abs(u3["invalid_answer_percentage"] - 1 / 3) < 1e-9
+    assert u3["invalid_answer_count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Curried usage
+# ---------------------------------------------------------------------------
+
+
+def test_curried_usage_of_add_metadata(df):
+    """Partial application: create the step first, apply to df later."""
+    p = Preprocessor()
+    step = p.add_metadata(["stratumid"])
+    result = step(df)
+    assert "stratumid" in result.columns
+    assert "stratumid" in p.keys
