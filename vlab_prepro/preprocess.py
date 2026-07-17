@@ -203,7 +203,7 @@ class Preprocessor:
     def add_metadata(self, keys, df):
         question_refs = set(df.question_ref.unique())
         for key in keys:
-            col_name = f"metadata_{key}" if key in question_refs else key
+            col_name = f"{key}_metadata" if key in question_refs else key
             df[col_name] = df.metadata.map(lambda x: json.loads(x).get(key))
             self.keys.add(col_name)
         return df

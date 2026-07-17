@@ -83,9 +83,9 @@ def test_add_metadata_prefixes_conflicting_key(df):
     df['metadata'] = df.metadata.map(lambda x: '{"A": "foo"}')
     p = Preprocessor()
     d = p.add_metadata(["A"], df)
-    assert "metadata_A" in d.columns
-    assert d["metadata_A"].iloc[0] == "foo"
-    assert "metadata_A" in p.keys
+    assert "A_metadata" in d.columns
+    assert d["A_metadata"].iloc[0] == "foo"
+    assert "A_metadata" in p.keys
 
 
 def test_add_duration_adds_answer_time_min_from_all_surveys(df):
